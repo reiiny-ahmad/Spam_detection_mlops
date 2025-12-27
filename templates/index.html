@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Spam Detection</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+        }
+        .spam {
+            background: #ffebee;
+            border-left: 5px solid #f44336;
+        }
+        .ham {
+            background: #e8f5e9;
+            border-left: 5px solid #4CAF50;
+        }
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Test de Détection de Spam</h1>
+        
+        <p>Collez le texte d'un email ci-dessous pour vérifier s'il s'agit d'un spam :</p>
+        
+        <textarea id="emailText" placeholder="Exemple: Gagnez 1 million de dollars gratuitement en cliquant ici..."></textarea>
+        
+        <div>
+            <button onclick="checkSpam()">Analyser</button>
+            <button onclick="loadExample('spam')" style="background: #ff9800;">Exemple Spam</button>
+            <button onclick="loadExample('ham')" style="background: #2196F3;">Exemple Normal</button>
+            <button onclick="clearText()" style="background: #9e9e9e;">Effacer</button>
+        </div>
+        
+        <div id="loading" class="loading" style="display: none;">
+            ⏳ Analyse en cours...
+        </div>
+        
+        <div id="result" class="result"></div>
+        
+        <div id="status" style="margin-top: 20px; padding: 10px; background: #e3f2fd; border-radius: 5px;">
+            <strong>Status API:</strong> <span id="apiStatus">Non vérifié</span>
+        </div>
+    </div>
+
+    <script>
+        // Vérifier le status de l'API au chargement
+        async function checkApiStatus() {
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                document.getElementById('apiStatus').innerHTML = 
+                    `✅ En ligne (Modèle: ${data.model_loaded ? 'Chargé' : 'Non chargé'})`;
+            } catch (error) {
+                document.getElementById('apiStatus').innerHTML = '❌ Hors ligne';
+            }
+        }
+        
+        // Analyser un email
+        async function checkSpam() {
+            const text = document.getElementById('emailText').value.trim();
+            
+            if (!text) {
+                alert('Veuillez entrer un texte à analyser');
+                return;
+            }
+            
+            // Afficher le loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('result').style.display = 'none';
+            
+            try {
+                const response = await fetch('/api/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text: text })
+                });
+                
+                const data = await response.json();
+                
+                // Cacher le loading
+                document.getElementById('loading').style.display = 'none';
+                
+                if (data.success) {
+                    displayResult(data.data);
+                } else {
+                    showError(data.error || 'Erreur inconnue');
+                }
+                
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                showError('Erreur de connexion à l\'API');
+                console.error('Erreur:', error);
+            }
+        }
+        
+        // Afficher le résultat
+        function displayResult(data) {
+            const resultDiv = document.getElementById('result');
+            
+            let html = `
+                <h3>${data.is_spam ? '⚠️ SPAM DÉTECTÉ' : '✅ EMAIL LÉGITIME'}</h3>
+                <p><strong>Prédiction:</strong> ${data.prediction}</p>
+                <p><strong>Confiance:</strong> ${data.confidence}</p>
+                <p><strong>Probabilité SPAM:</strong> ${data.probabilities.spam}%</p>
+                <p><strong>Probabilité HAM:</strong> ${data.probabilities.ham}%</p>
+                <p><strong>Message:</strong> ${data.message}</p>
+                <p><strong>Longueur:</strong> ${data.analysis.text_length} caractères, ${data.analysis.word_count} mots</p>
+            `;
+            
+            if (data.analysis.detected_keywords.length > 0) {
+                html += `<p><strong>Mots-clés suspects:</strong> ${data.analysis.detected_keywords.join(', ')}</p>`;
+            }
+            
+            resultDiv.innerHTML = html;
+            resultDiv.className = 'result ' + (data.is_spam ? 'spam' : 'ham');
+            resultDiv.style.display = 'block';
+        }
+        
+        // Afficher une erreur
+        function showError(message) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = `<div class="error">❌ Erreur: ${message}</div>`;
+            resultDiv.className = 'result';
+            resultDiv.style.display = 'block';
+        }
+        
+        // Charger des exemples
+        function loadExample(type) {
+            const examples = {
+                spam: `FÉLICITATIONS ! Vous avez été sélectionné pour gagner 1 MILLION DE DOLLARS !
+
+Notre système a choisi votre adresse email parmi 10 millions de participants. Pour réclamer votre prix, cliquez sur le lien ci-dessous et remplissez le formulaire avec vos coordonnées bancaires.
+
+👉 http://gagnez-million-facile.com/claim
+
+Cette offre est EXCLUSIVE et VALABLE 24H SEULEMENT. Ne manquez pas cette opportunité unique !`,
+                
+                ham: `Bonjour l'équipe,
+
+Je vous envoie ce mail pour confirmer notre réunion de demain à 10h en salle B.
+
+Voici l'ordre du jour prévu :
+1. Revue du projet en cours
+2. Présentation des résultats du trimestre
+3. Planification des prochaines étapes
+4. Questions diverses
+
+Pourriez-vous m'envoyer vos présentations avant 17h aujourd'hui ?
+
+Bien cordialement,
+Jean Dupont
+Responsable Projet`
+            };
+            
+            document.getElementById('emailText').value = examples[type];
+        }
+        
+        // Effacer le texte
+        function clearText() {
+            document.getElementById('emailText').value = '';
+            document.getElementById('result').style.display = 'none';
+        }
+        
+        // Vérifier le status de l'API au chargement de la page
+        window.onload = checkApiStatus;
+    </script>
+</body>
+</html>
