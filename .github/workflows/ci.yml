@@ -17,18 +17,21 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.9'   # ou la version que tu utilises
+        python-version: '3.9'
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
+    - name: Install project in editable mode   # ← AJOUT CRITIQUE
+      run: pip install -e .
+
     - name: Run tests with pytest
-      run: pytest tests/ -v   # -v pour plus de détails dans les logs
+      run: pytest tests/ -v
 
   build:
-    needs: test               # le build ne se lance que si les tests passent
+    needs: test
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
