@@ -1,8 +1,8 @@
-version: '3'
 services:
   api:
-    build: .
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     ports:
       - "5000:5000"
-    volumes:
-      - .:/app
+    restart: unless-stopped
