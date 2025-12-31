@@ -24,7 +24,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Install project in editable mode   # ← AJOUT CRITIQUE
+    - name: Install project in editable mode   # ← Cette étape résout le problème !
       run: pip install -e .
 
     - name: Run tests with pytest
