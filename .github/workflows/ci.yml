@@ -14,8 +14,8 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v4
       with:
         python-version: '3.9'
 
@@ -23,20 +23,68 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install pytest
 
-    - name: Install project in editable mode
-      run: pip install -e .
+    - name: Create model files for tests
+      run: |
+        mkdir -p model
+        python -c "
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.feature_extraction.text import CountVectorizer
+        import joblib
+        import pandas as pd
+        
+        data = pd.DataFrame({
+            'text': ['gagner million', 'bonjour réunion'],
+            'label': [1, 0]
+        })
+        vectorizer = CountVectorizer()
+        X = vectorizer.fit_transform(data['text'])
+        model = RandomForestClassifier().fit(X, data['label'])
+        
+        joblib.dump(model, 'model/model.pkl')
+        joblib.dump(vectorizer, 'model/vectorizer.pkl')
+        print('✅ Modèles créés pour tests')
+        "
 
-    - name: Run tests with pytest
-      run: pytest tests/ -v
+    - name: Run tests
+      run: |
+        pytest tests/ -v
 
-  build:
+  docker-build:
     needs: test
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Important pour le contexte Docker
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: List files (debug)
+      run: |
+        echo "📁 Structure des fichiers :"
+        ls -la
+        echo "📁 Contenu de api/ :"
+        ls -la api/ || echo "api/ non trouvé"
+        echo "📁 Contenu de model/ :"
+        ls -la model/ || echo "model/ non trouvé"
+        echo "📄 requirements.txt :"
+        cat requirements.txt || echo "requirements.txt non trouvé"
 
     - name: Build Docker image
-      run: docker build -t spam-detection:latest .
+      run: |
+        docker build -t spam-detection:latest .
+
+    - name: Test Docker image
+      run: |
+        docker run -d -p 5000:5000 --name test-container spam-detection:latest
+        sleep 10
+        docker ps
+        docker logs test-container
+        curl -f http://localhost:5000/api/health || (docker logs test-container && exit 1)
+        docker stop test-container
+        docker rm test-container

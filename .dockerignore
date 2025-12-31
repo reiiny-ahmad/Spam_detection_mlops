@@ -1,0 +1,30 @@
+# Exclure les dossiers inutiles pour le build
+.git/
+.github/
+.vscode/
+.idea/
+__pycache__/
+.pytest_cache/
+
+# Exclure les fichiers de tests
+tests/
+
+# Exclure les environnements virtuels
+venv/
+.env
+.venv/
+
+# Exclure les fichiers système
+.DS_Store
+Thumbs.db
+
+# Exclure les logs
+*.log
+logs/
+
+# NE PAS exclure ces dossiers/fichiers (importants pour l'app) :
+# !api/
+# !model/
+# !templates/
+# !requirements.txt
+# !app.py (si vous le déplacez à la racine)
