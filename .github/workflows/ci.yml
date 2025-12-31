@@ -1,21 +1,86 @@
 name: CI/CD Pipeline
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python 3.9  # ← CHANGER ICI
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'  # ← Python 3.9 au lieu de 3.12
+        cache: 'pip'
+    
     - name: Install dependencies
-      run: pip install -r requirements.txt
-    - name: Run tests
-      run: python -m pytest tests/
-  
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov
+    
+    # ... reste du workflow inchangé
+    
+    - name: Create test model files
+      run: |
+        mkdir -p model
+        python -c "
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.feature_extraction.text import CountVectorizer
+        import joblib
+        import pandas as pd
+        
+        data = pd.DataFrame({
+            'text': ['gagner million dollars', 'réunion demain', 'offre exclusive'],
+            'label': [1, 0, 1]
+        })
+        vectorizer = CountVectorizer()
+        X = vectorizer.fit_transform(data['text'])
+        model = RandomForestClassifier().fit(X, data['label'])
+        
+        joblib.dump(model, 'model/model.pkl')
+        joblib.dump(vectorizer, 'model/vectorizer.pkl')
+        print('✅ Modèles de test créés')
+        "
+    
+    - name: Run unit tests
+      run: |
+        python -m pytest tests/ -v
+    
+    - name: Test API locally
+      run: |
+        python app.py &
+        sleep 5
+        curl -f http://localhost:5000/api/health || exit 1
+        pkill -f "python app.py"
+
   docker-build:
+    name: Build Docker Image
     needs: test
     runs-on: ubuntu-latest
+    
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
     - name: Build Docker image
-      run: docker build -t spam-api .
+      run: |
+        docker build -t spam-detection-api .
+    
+    - name: Test Docker container
+      run: |
+        docker run -d -p 5000:5000 --name test-container spam-detection-api
+        sleep 10
+        curl -f http://localhost:5000/api/health || exit 1
+        docker stop test-container
+        docker rm test-container
